@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulasi Monte Carlo Iklan Digital</title>
+<style>
+  :root { --bg:#f5f6fa; --card:#fff; --text:#1f2430; --muted:#6b7280; --accent:#2563eb; --border:#e3e6ee; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1218; --card:#181c25; --text:#e8eaf0; --muted:#9aa3b2; --accent:#60a5fa; --border:#2a3040; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+  header { padding:24px 20px 8px; max-width:1100px; margin:0 auto; }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:.9rem; }
+  main { max-width:1100px; margin:0 auto; padding:16px 20px 40px; display:grid; grid-template-columns:300px 1fr; gap:20px; }
+  @media (max-width:800px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .card h2 { font-size:1.05rem; margin:0 0 12px; }
+  label { display:block; font-size:.85rem; margin:10px 0 4px; color:var(--muted); }
+  input, select { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font-size:.95rem; }
+  button { margin-top:16px; width:100%; padding:10px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:1rem; cursor:pointer; }
+  .grid4 { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .metric { border:1px solid var(--border); border-radius:10px; padding:12px; }
+  .metric .k { font-size:.8rem; color:var(--muted); }
+  .metric .v { font-size:1.25rem; font-weight:600; }
+  img { max-width:100%; height:auto; border-radius:8px; background:#fff; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--border); }
+  .badge { display:inline-block; padding:2px 10px; border-radius:99px; color:#fff; font-weight:600; font-size:.85rem; }
+  .RENDAH { background:var(--ok); } .SEDANG { background:var(--warn); } .TINGGI { background:var(--bad); }
+  .error { color:var(--bad); }
+  ul { margin:6px 0 0 18px; padding:0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Simulasi Monte Carlo Probabilitas Penurunan Pendapatan Kampanye Iklan Digital</h1>
+  <div class="sub">TA-03 Pemodelan dan Simulasi &middot; Dataset: Digital Marketing Conversion (Kaggle)</div>
+</header>
+
+{% if error %}
+<main><div class="card error"><strong>Terjadi masalah:</strong> {{ error }}</div></main>
+{% else %}
+<main>
+  <aside>
+    <form method="post" class="card">
+      <h2>Parameter Simulasi</h2>
+      <label>Seed (NIM)</label>
+      <input type="number" name="seed" value="{{ form.seed }}" min="0">
+      <label>Jumlah skenario (1.000 - 100.000)</label>
+      <input type="number" name="n_sim" value="{{ form.n_sim }}" min="1000" max="100000" step="1000">
+      <label>Horizon (hari)</label>
+      <input type="number" name="hari" value="{{ form.hari }}" min="1" max="365">
+      <label>Batas penurunan (%)</label>
+      <input type="number" name="pct" value="{{ form.pct }}" min="1" max="50" step="1">
+      <label>Distribusi ConversionRate</label>
+      <select name="dist">
+        <option value="normal" {% if form.dist == 'normal' %}selected{% endif %}>Normal</option>
+        <option value="uniform" {% if form.dist == 'uniform' %}selected{% endif %}>Uniform</option>
+      </select>
+      <h2 style="margin-top:20px">Asumsi Bisnis</h2>
+      <label>Pengunjung per hari</label>
+      <input type="number" name="visitors" value="{{ form.visitors }}" min="1">
+      <label>Pendapatan per konversi</label>
+      <input type="number" name="nilai" value="{{ form.nilai }}" min="0.01" step="any">
+      <button type="submit">Jalankan Simulasi</button>
+    </form>
+  </aside>
+
+  <section>
+    <div class="card">
+      <h2>Data &amp; Parameter</h2>
+      <div class="grid4">
+        <div class="metric"><div class="k">Baris awal</div><div class="v">{{ "{:,}".format(p.n_raw) }}</div></div>
+        <div class="metric"><div class="k">Setelah cleaning</div><div class="v">{{ "{:,}".format(p.n_clean) }}</div></div>
+        <div class="metric"><div class="k">Mean (&mu;)</div><div class="v">{{ "%.5f"|format(p.mu) }}</div></div>
+        <div class="metric"><div class="k">Std Dev (&sigma;)</div><div class="v">{{ "%.5f"|format(p.sigma) }}</div></div>
+      </div>
+      <p class="sub">File: {{ p.filename }}</p>
+      <img src="data:image/png;base64,{{ p.hist_img }}" alt="Histogram data asli">
+    </div>
+
+    {% if result %}
+    <div class="card">
+      <h2>Hasil Simulasi</h2>
+      <div class="grid4">
+        <div class="metric"><div class="k">P(turun &gt; {{ "%g"|format(form.pct) }}%)</div><div class="v">{{ "%.2f"|format(result.prob * 100) }}%</div></div>
+        <div class="metric"><div class="k">Baseline</div><div class="v">{{ "{:,.0f}".format(result.baseline) }}</div></div>
+        <div class="metric"><div class="k">Rata-rata simulasi</div><div class="v">{{ "{:,.0f}".format(result.mean) }}</div></div>
+        <div class="metric"><div class="k">Persentil 5% (VaR)</div><div class="v">{{ "{:,.0f}".format(result.var5) }}</div></div>
+      </div>
+      <p>Tingkat risiko: <span class="badge {{ result.level }}">{{ result.level }}</span></p>
+      <img src="data:image/png;base64,{{ result.img }}" alt="Histogram hasil simulasi">
+    </div>
+
+    <div class="card">
+      <h2>Analisis Sensitivitas</h2>
+      <table>
+        <tr><th>Penurunan pendapatan</th><th>Probabilitas</th></tr>
+        {% for label, pr in result.sens %}
+        <tr><td>{{ label }}</td><td>{{ "%.2f"|format(pr * 100) }}%</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% else %}
+    <div class="card"><p class="sub">Atur parameter di panel kiri, lalu klik <strong>Jalankan Simulasi</strong>.</p></div>
+    {% endif %}
+
+    <div class="card">
+      <h2>Tentang Model</h2>
+      <p><code>Pendapatan harian = pengunjung/hari &times; ConversionRate acak &times; nilai per konversi</code></p>
+      <ul>
+        <li>&mu; dan &sigma; diambil dari kolom <code>ConversionRate</code> setelah cleaning outlier (3&times;IQR).</li>
+        <li>Pengunjung per hari dan nilai per konversi adalah asumsi, bukan dari dataset.</li>
+        <li>Hari dianggap saling independen; tren dan musiman tidak dimodelkan.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+{% endif %}
+</body>
+</html>
